@@ -20,7 +20,7 @@ type BigCore struct {
 	eletor        *Elector
 	commitor      *Commitor
 	spbInstances  map[int]map[NodeID]*BigSPB
-	speedVoteNums map[int]map[NodeID]struct{}
+	speedVoteNums map[int]map[NodeID]int
 	reportNums    map[int][3]int
 }
 
@@ -46,7 +46,7 @@ func NewBigCore(
 		sigService:    sigService,
 		store:         store,
 		spbInstances:  make(map[int]map[NodeID]*BigSPB),
-		speedVoteNums: make(map[int]map[NodeID]struct{}),
+		speedVoteNums: make(map[int]map[NodeID]int),
 		reportNums:    make(map[int][3]int),
 		eletor:        NewElector(sigService, committee),
 		commitor:      NewCommitor(store, commitChannel),
@@ -129,12 +129,11 @@ func (corer *BigCore) handleSpeedVoteMsg(sv *SpeedVoteMsg) error {
 
 	nodes, ok := corer.speedVoteNums[sv.View]
 	if !ok {
-		nodes = make(map[NodeID]struct{})
+		nodes = make(map[NodeID]int)
 		corer.speedVoteNums[sv.View] = nodes
 	}
-	nodes[sv.Author] = struct{}{}
-
-	if len(nodes) == corer.committee.HightThreshold() {
+	nodes[sv.Author]++
+	if nodes[corer.nodeID] == corer.committee.HightThreshold() {
 		//elect msg
 		elect, _ := NewElectMsg(corer.nodeID, sv.View, corer.sigService)
 		corer.transmitor.Send(corer.nodeID, NONE, elect)
