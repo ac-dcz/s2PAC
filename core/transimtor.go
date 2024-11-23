@@ -5,16 +5,23 @@ import (
 	"time"
 )
 
+type latencyMsg struct {
+	msg *network.NetMessage
+	ts  int64
+}
+
 type Transmitor struct {
-	sender     *network.Sender
-	receiver   *network.Receiver
-	recvCh     chan ConsensusMessage
-	msgCh      chan *network.NetMessage
-	parameters Parameters
-	committee  Committee
+	sender      *network.Sender
+	receiver    *network.Receiver
+	recvCh      chan ConsensusMessage
+	msgCh       chan *network.NetMessage
+	parameters  Parameters
+	committee   Committee
+	latencyChan []chan *latencyMsg
 }
 
 func NewTransmitor(
+	node NodeID,
 	sender *network.Sender,
 	receiver *network.Receiver,
 	parameters Parameters,
@@ -22,12 +29,29 @@ func NewTransmitor(
 ) *Transmitor {
 
 	tr := &Transmitor{
-		sender:     sender,
-		receiver:   receiver,
-		recvCh:     make(chan ConsensusMessage, 1_000),
-		msgCh:      make(chan *network.NetMessage, 1_000),
-		parameters: parameters,
-		committee:  committee,
+		sender:      sender,
+		receiver:    receiver,
+		recvCh:      make(chan ConsensusMessage, 1_000),
+		msgCh:       make(chan *network.NetMessage, 1_000),
+		parameters:  parameters,
+		committee:   committee,
+		latencyChan: make([]chan *latencyMsg, len(parameters.Latency)),
+	}
+
+	for i := range tr.latencyChan {
+		tr.latencyChan[i] = make(chan *latencyMsg, 1000)
+		go func(ind int) {
+			latency := tr.parameters.Latency[int(node)%len(parameters.Latency)][ind]
+			for msg := range tr.latencyChan[ind] {
+				now := time.Now().UnixMilli()
+				if now-msg.ts >= int64(latency) {
+					tr.msgCh <- msg.msg
+				} else {
+					time.Sleep(time.Duration(int64(latency)-now+msg.ts) * time.Millisecond)
+					tr.msgCh <- msg.msg
+				}
+			}
+		}(i)
 	}
 
 	go func() {
@@ -63,9 +87,16 @@ func (tr *Transmitor) Send(from, to NodeID, msg ConsensusMessage) error {
 			}
 		})
 	} else {
-		tr.msgCh <- &network.NetMessage{
-			Msg:     msg,
-			Address: addr,
+		for _, address := range addr {
+			node := tr.committee.IDByAddres(address)
+			msg := &network.NetMessage{
+				Msg:     msg,
+				Address: []string{address},
+			}
+			tr.latencyChan[int(node)%len(tr.latencyChan)] <- &latencyMsg{
+				msg: msg,
+				ts:  time.Now().UnixMilli(),
+			}
 		}
 	}
 

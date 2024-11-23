@@ -52,7 +52,7 @@ func Consensus(
 	sender, receiver := network.NewSender(cc), network.NewReceiver(addr, cc)
 	go sender.Run()
 	go receiver.Run()
-	transmitor := NewTransmitor(sender, receiver, parameters, committee)
+	transmitor := NewTransmitor(id, sender, receiver, parameters, committee)
 
 	//Step 2: Waiting for all nodes to be online
 	logger.Info.Println("Waiting for all nodes to be online...")
@@ -74,9 +74,10 @@ func Consensus(
 		}(addr)
 	}
 	wg.Wait()
+	logger.Error.Println("test-1")
 	time.Sleep(time.Millisecond * time.Duration(parameters.SyncTimeout))
 	txpool.Run()
-
+	logger.Error.Println("test-2")
 	//Step 3: start protocol
 	if parameters.Protocol == PAC_LEAN {
 		corer := NewCore(id, committee, parameters, txpool, transmitor, store, sigService, commitChannel)

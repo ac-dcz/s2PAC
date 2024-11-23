@@ -3,13 +3,14 @@ package core
 import "bft/2pac/crypto"
 
 type Parameters struct {
-	SyncTimeout   int  `json:"sync_timeout"`
-	NetwrokDelay  int  `json:"network_delay"`
-	MinBlockDelay int  `json:"min_block_delay"`
-	DDos          bool `json:"ddos"`
-	Faults        int  `json:"faults"`
-	RetryDelay    int  `json:"retry_delay"`
-	Protocol      int  `json:"protocol"`
+	SyncTimeout   int     `json:"sync_timeout"`
+	NetwrokDelay  int     `json:"network_delay"`
+	MinBlockDelay int     `json:"min_block_delay"`
+	DDos          bool    `json:"ddos"`
+	Faults        int     `json:"faults"`
+	RetryDelay    int     `json:"retry_delay"`
+	Protocol      int     `json:"protocol"`
+	Latency       [][]int `json:"latency"`
 }
 
 var DefaultParameters = Parameters{
@@ -39,6 +40,15 @@ type Committee struct {
 func (c Committee) ID(name crypto.PublickKey) NodeID {
 	for id, authority := range c.Authorities {
 		if authority.Name.Pubkey.Equal(name.Pubkey) {
+			return id
+		}
+	}
+	return NONE
+}
+
+func (c Committee) IDByAddres(address string) NodeID {
+	for id, authority := range c.Authorities {
+		if authority.Addr == address {
 			return id
 		}
 	}

@@ -288,6 +288,7 @@ func (corer *DAGBigCore) advanceView(view int, height uint8) {
 func (corer *DAGBigCore) Run() {
 	if corer.nodeID >= NodeID(corer.parameters.Faults) {
 		//first propose
+		logger.Error.Println("DAG-BigCore")
 		if block := corer.generatorBlock(corer.view, corer.height, nil); block == nil {
 			panic("first block error")
 		} else {
