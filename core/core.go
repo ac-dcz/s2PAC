@@ -5,6 +5,7 @@ import (
 	"bft/2pac/logger"
 	"bft/2pac/pool"
 	"bft/2pac/store"
+	"fmt"
 )
 
 const (
@@ -140,7 +141,12 @@ func (corer *Core) handleProposeMsg(p *ProposeMsg) error {
 
 	// }
 
-	//Step2: store block ? you should check that p.B.qc->B1 store
+	//Stpe2: DocG Verify
+	if p.DocG != nil && !p.DocG.Verify(corer.committee) {
+		return fmt.Errorf("DocG verify error")
+	}
+
+	//Step3: store block ? you should check that p.B.qc->B1 store
 	if err := storeBlock(corer.store, p.B); err != nil {
 		return err
 	}
@@ -211,7 +217,7 @@ func (corer *Core) handleSpeedVoteMsg(sv *SpeedVoteMsg) error {
 		return ErrSignature(sv.MsgType(), sv.View, int(sv.Author))
 	}
 
-	go corer.getSpbInstance(sv.View, sv.Author).processSpeedVoteMsg(sv)
+	go corer.getSpbInstance(sv.View, sv.Proposer).processSpeedVoteMsg(sv)
 
 	return nil
 }
@@ -252,6 +258,7 @@ func (corer *Core) processCoin(leader NodeID, view int) error {
 	if _, ok := corer.coinViewFlags[view]; !ok {
 		spb := corer.getSpbInstance(view, leader)
 		if spb.SpeedCert() {
+			logger.Info.Printf("speed commit Block view %d \n", view)
 			blockHash := spb.BlockHash(HEIGHT_2)
 			if block, err := getBlock(corer.store, blockHash); err != nil {
 				return err
@@ -291,13 +298,14 @@ func (corer *Core) handleReportMsg(r *ReportMsg) error {
 	nums[r.Level]++
 	corer.reportNums[r.View] = nums
 	if nums[LEVEL_2] == 1 || nums[LEVEL_1] == corer.committee.HightThreshold() || nums[LEVEL_0] == corer.committee.HightThreshold() {
-		corer.advanceView(r.View+1, r.BlockQc)
+		docG := NewDocGQCMsg(r.View, r.Level, nil)
+		corer.advanceView(r.View+1, r.BlockQc, docG)
 	}
 
 	return nil
 }
 
-func (corer *Core) advanceView(view int, qc *BlockQC) {
+func (corer *Core) advanceView(view int, qc *BlockQC, docG *DocGQCMsg) {
 	if view <= corer.view {
 		return
 	}
@@ -311,6 +319,7 @@ func (corer *Core) advanceView(view int, qc *BlockQC) {
 		logger.Error.Println(err)
 		panic(err)
 	} else {
+		propose.DocG = docG
 		corer.transmitor.Send(corer.nodeID, NONE, propose)
 		corer.transmitor.RecvChannel() <- propose
 	}

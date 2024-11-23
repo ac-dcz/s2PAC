@@ -5,6 +5,7 @@ import (
 	"bft/2pac/logger"
 	"bft/2pac/pool"
 	"bft/2pac/store"
+	"fmt"
 )
 
 type DAGBigCore struct {
@@ -133,7 +134,12 @@ func (corer *DAGBigCore) handleProposeMsg(p *ProposeMsg) error {
 
 	// }
 
-	//Step2: store block ? you should check that p.B.qc->B1 store
+	//Stpe2: DocG Verify
+	if p.DocG != nil && !p.DocG.Verify(corer.committee) {
+		return fmt.Errorf("DocG verify error")
+	}
+
+	//Step3: store block ? you should check that p.B.qc->B1 store
 	if err := storeBlock(corer.store, p.B); err != nil {
 		return err
 	}
@@ -181,7 +187,7 @@ func (corer *DAGBigCore) handleSpeedVoteMsg(sv *SpeedVoteMsg) error {
 		corer.transmitor.RecvChannel() <- elect
 	}
 
-	go corer.getSpbInstance(sv.View, sv.Author).processSpeedVoteMsg(sv)
+	go corer.getSpbInstance(sv.View, sv.Proposer).processSpeedVoteMsg(sv)
 
 	return nil
 }
@@ -206,6 +212,7 @@ func (corer *DAGBigCore) processCoin(leader NodeID, view int) error {
 
 	spb := corer.getSpbInstance(view, leader)
 	if spb.SpeedCert() { //Commit height-2 SpeedVote Commit Rule
+		logger.Info.Printf("speed commit Block view %d \n", view)
 		blockHash := spb.BlockHash(HEIGHT_2)
 		if block, err := getBlock(corer.store, blockHash); err != nil {
 			return err

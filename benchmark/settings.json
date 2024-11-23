@@ -5,7 +5,7 @@
         "accesskey": "/root/.aliyun/access.json"
     },
     "ports": {
-        "consensus": 8000
+        "consensus": 20000
     },
     "instances": {
         "type": "ecs.g6e.xlarge",

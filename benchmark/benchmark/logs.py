@@ -21,20 +21,20 @@ class LogParser:
         self.ddos = ddos
         self.faults = faults
         self.committee_size = len(nodes)
-
+        self.maxView = 0
         # Parse the nodes logs.
         try:
             with Pool() as p:
                 results = p.map(self._parse_nodes, nodes)
         except (ValueError, IndexError) as e:
             raise ParseError(f'Failed to parse node logs: {e}')
-        batchs,proposals, commits,configs = zip(*results)
+        batchs,proposals, commits,configs,speedCommits,views = zip(*results)
         self.proposals = self._merge_results([x.items() for x in proposals])
         self.commits = self._merge_results([x.items() for x in commits])
-        print(len(self.proposals)/4)
-        print(len(self.commits))
         self.batchs = self._merge_results([x.items() for x in batchs])
+        self.speedCommits = self._merge_results([x.items() for x in speedCommits])
         self.configs = configs[0]
+        self.maxView = max(views)
 
     def _merge_results(self, input):
         # Keep the earliest timestamp.
@@ -55,10 +55,16 @@ class LogParser:
         tmp = findall(r'\[INFO] (.*) .* create Block view \d+ height \d+ node \d+ batch_id (\d+)', log)
         proposals = { id:self._to_posix(t) for t,id in tmp }
 
-
-        tmp = findall(r'\[INFO] (.*) .* commit Block view \d+ height \d+ node \d+ batch_id (\d+)', log)
-        tmp = [(d, self._to_posix(t)) for t, d in tmp]
+        maxView = 0
+        tmp = findall(r'\[INFO] (.*) .* commit Block view (\d+) height \d+ node \d+ batch_id (\d+)', log)
+        for (_,v,_) in tmp:
+            maxView = max(maxView,int(v))
+        tmp = [(d, self._to_posix(t)) for t,_, d in tmp]
         commits = self._merge_results([tmp])
+
+        tmp = findall(r'\[INFO] (.*) .* speed commit Block view (\d+)', log)
+        tmp = [(v, self._to_posix(t)) for t, v in tmp]
+        speedCommits = self._merge_results([tmp])
 
         configs = {
             'consensus': {
@@ -79,7 +85,7 @@ class LogParser:
             }
         }
 
-        return batchs,proposals, commits,configs
+        return batchs,proposals, commits,configs,speedCommits,maxView
 
     def _to_posix(self, string):
         # 解析时间字符串为 datetime 对象
@@ -144,6 +150,7 @@ class LogParser:
             '\n'
             f' End-to-end TPS: {round(end_to_end_tps):,} tx/s\n'
             f' End-to-end latency: {round(end_to_end_latency):,} ms\n'
+            f' Spedd View: {len(self.speedCommits)}/{self.maxView} view\n'
             '-----------------------------------------\n'
         )
 

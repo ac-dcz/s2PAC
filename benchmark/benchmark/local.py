@@ -6,7 +6,7 @@ from time import sleep
 from benchmark.commands import CommandMaker
 from benchmark.config import Key, TSSKey, LocalCommittee, NodeParameters, BenchParameters, ConfigError
 from benchmark.logs import LogParser, ParseError
-from benchmark.utils import Print, BenchError, PathMaker
+from benchmark.utils import Print, BenchError, PathMaker,progress_bar
 from datetime import datetime
 
 class LocalBench:
@@ -14,7 +14,6 @@ class LocalBench:
 
     def __init__(self, bench_parameters_dict, node_parameters_dict):
         try:
-            self.ts = datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S")
             self.bench_parameters = BenchParameters(bench_parameters_dict)
             self.node_parameters = NodeParameters(node_parameters_dict)
         except ConfigError as e:
@@ -42,81 +41,90 @@ class LocalBench:
 
         try:
             Print.info('Setting up testbed...')
-            nodes, rate,batch_size = self.bench_parameters.nodes[0], self.bench_parameters.rate,self.bench_parameters.batch_szie[0]
-            self.node_parameters.json['pool']['rate'] = rate
-            self.node_parameters.json['pool']['batch_size'] = batch_size 
-            # Cleanup all files.
-            cmd = f'{CommandMaker.cleanup_configs()} ; {CommandMaker.make_logs_and_result_dir(self.ts)}'
-            subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
-            sleep(0.5) # Removing the store may take time.
+            batch_size = self.bench_parameters.batch_szie[0]
+            for nodes in self.bench_parameters.nodes:
+                for rate in self.bench_parameters.rate:
+                    
+                    self.ts = datetime.now().strftime(r"%Y-%m-%d-%H-%M-%S")
+                    self.node_parameters.json['pool']['rate'] = rate
+                    self.node_parameters.json['pool']['batch_size'] = batch_size 
+                    # Cleanup all files.
+                    cmd = f'{CommandMaker.cleanup_configs()} ; {CommandMaker.make_logs_and_result_dir(self.ts)}'
+                    subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
+                    sleep(0.5) # Removing the store may take time.
 
-            # Recompile the latest code.
-            cmd = CommandMaker.compile().split()
-            subprocess.run(cmd, check=True)
+                    # Recompile the latest code.
+                    cmd = CommandMaker.compile().split()
+                    subprocess.run(cmd, check=True)
 
-            # Generate configuration files.
-            keys = []
-            key_files = [PathMaker.key_file(i) for i in range(nodes)]
-            cmd = CommandMaker.generate_key(path="./",nodes=nodes).split()
-            subprocess.run(cmd, check=True)
-            for filename in key_files:
-                keys += [Key.from_file(filename)]
+                    # Generate configuration files.
+                    keys = []
+                    key_files = [PathMaker.key_file(i) for i in range(nodes)]
+                    cmd = CommandMaker.generate_key(path="./",nodes=nodes).split()
+                    subprocess.run(cmd, check=True)
+                    for filename in key_files:
+                        keys += [Key.from_file(filename)]
 
-            # Generate threshold signature files.
-            tss_keys = []
-            threshold_key_files = [PathMaker.threshold_key_file(i) for i in range(nodes)]
-            N , T = nodes , 2 * (( nodes - 1 ) // 3) + 1
-            cmd = CommandMaker.generate_tss_key(path = "./", N = N, T = T).split()
-            subprocess.run(cmd, check=True)
-            for filename in threshold_key_files:
-                tss_keys += [TSSKey.from_file(filename)]
+                    # Generate threshold signature files.
+                    tss_keys = []
+                    threshold_key_files = [PathMaker.threshold_key_file(i) for i in range(nodes)]
+                    N , T = nodes , 2 * (( nodes - 1 ) // 3) + 1
+                    cmd = CommandMaker.generate_tss_key(path = "./", N = N, T = T).split()
+                    subprocess.run(cmd, check=True)
+                    for filename in threshold_key_files:
+                        tss_keys += [TSSKey.from_file(filename)]
 
-            # Generate committee file
-            names = [x.pubkey for x in keys]
-            ids = [i for i in range(nodes)]
-            committee = LocalCommittee(names, ids, self.BASE_PORT)
-            committee.print(PathMaker.committee_file())
-            self.node_parameters.print(PathMaker.parameters_file())
-            
-            Print.info(f'Running {self.bench_parameters.protocol}')
-            Print.info(f'{self.node_parameters.faults} byzantine nodes')
-            Print.info(f'tx_size {self.node_parameters.tx_size} byte, batch_size {batch_size}, rate {rate} tx/s')
-            Print.info(f'DDOS attack {self.node_parameters.ddos}')
+                    # Generate committee file
+                    names = [x.pubkey for x in keys]
+                    ids = [i for i in range(nodes)]
+                    committee = LocalCommittee(names, ids, self.BASE_PORT)
+                    committee.print(PathMaker.committee_file())
+                    self.node_parameters.print(PathMaker.parameters_file())
+                    
+                    Print.info(f'Running {self.bench_parameters.protocol}')
+                    Print.info(f'{self.node_parameters.faults} byzantine nodes')
+                    Print.info(f'tx_size {self.node_parameters.tx_size} byte, batch_size {batch_size}, rate {rate} tx/s')
+                    Print.info(f'DDOS attack {self.node_parameters.ddos}')
 
-            # Run the nodes.
-            dbs = [PathMaker.db_path(i) for i in range(nodes)]
-            node_logs = [PathMaker.node_log_error_file(i,self.ts) for i in range(nodes)]
+                    # Run the nodes.
+                    dbs = [PathMaker.db_path(i) for i in range(nodes)]
+                    node_logs = [PathMaker.node_log_error_file(i,self.ts) for i in range(nodes)]
 
-            for id,key_file, threshold_key_file, db, log_file in zip(ids,key_files, threshold_key_files, dbs, node_logs):
-                cmd = CommandMaker.run_node(
-                    id,
-                    key_file,
-                    threshold_key_file,
-                    PathMaker.committee_file(),
-                    db,
-                    PathMaker.parameters_file(),
-                    self.ts,
-                    self.bench_parameters.log_level
-                )
-                self._background_run(cmd, log_file)
+                    for id,key_file, threshold_key_file, db, log_file in zip(ids,key_files, threshold_key_files, dbs, node_logs):
+                        cmd = CommandMaker.run_node(
+                            id,
+                            key_file,
+                            threshold_key_file,
+                            PathMaker.committee_file(),
+                            db,
+                            PathMaker.parameters_file(),
+                            self.ts,
+                            self.bench_parameters.log_level
+                        )
+                        self._background_run(cmd, log_file)
 
-            # Wait for the nodes to synchronize
-            Print.info('Waiting for the nodes to synchronize...')
-            sleep(2 * self.node_parameters.sync_timeout / 1000)
+                    # Wait for the nodes to synchronize
+                    Print.info('Waiting for the nodes to synchronize...')
+                    sleep(2 * self.node_parameters.sync_timeout / 1000)
 
-            # Wait for all transactions to be processed.
-            Print.info(f'Running benchmark ({self.bench_parameters.duration} sec)...')
-            sleep(self.bench_parameters.duration)
-            self._kill_nodes()
+                    # Wait for all transactions to be processed.
+                    duration = self.bench_parameters.duration
+                    for _ in progress_bar(range(100), prefix=f'Running benchmark ({duration} sec):'):
+                        sleep(duration / 100)
+                    self._kill_nodes()
 
-            # Parse logs and return the parser.
-            Print.info('Parsing logs...')
-            return LogParser.process(
-                PathMaker.logs_path(self.ts), 
-                self.node_parameters.faults, 
-                self.bench_parameters.protocol, 
-                self.node_parameters.ddos
-            )
+                    # Parse logs and return the parser.
+                    Print.info('Parsing logs...')
+                    LogParser.process(
+                        PathMaker.logs_path(self.ts), 
+                        self.node_parameters.faults, 
+                        self.bench_parameters.protocol, 
+                        self.node_parameters.ddos
+                    ).print(
+                        PathMaker.result_file(
+                                nodes, rate, self.node_parameters.tx_size,batch_size , self.node_parameters.faults,self.ts
+                        )
+                    )
 
         except (subprocess.SubprocessError, ParseError) as e:
             self._kill_nodes()

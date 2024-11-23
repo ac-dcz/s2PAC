@@ -53,6 +53,7 @@ type ProposeMsg struct {
 	B         *Block
 	View      int
 	Height    uint8
+	DocG      *DocGQCMsg
 	Signature crypto.Signature
 }
 
@@ -342,6 +343,32 @@ func (r *ReportMsg) MsgType() int {
 	return ReportType
 }
 
+type DocGQCMsg struct {
+	View   int
+	Level  uint8
+	Shares []*ReportMsg
+}
+
+func NewDocGQCMsg(View int, Level uint8, shares []*ReportMsg) *DocGQCMsg {
+	m := &DocGQCMsg{
+		View:   View,
+		Level:  Level,
+		Shares: shares,
+	}
+	return m
+}
+
+func (d *DocGQCMsg) Verify(committee Committee) bool {
+	for _, share := range d.Shares {
+		share.Verify(committee)
+	}
+	return true
+}
+
+func (d *DocGQCMsg) MsgType() int {
+	return DocGQCType
+}
+
 const (
 	ProposeType int = iota
 	VoteType
@@ -350,6 +377,7 @@ const (
 	ElectType
 	RandomCoinType
 	ReportType
+	DocGQCType
 )
 
 var DefaultMsgTypes = map[int]reflect.Type{
@@ -360,4 +388,5 @@ var DefaultMsgTypes = map[int]reflect.Type{
 	ElectType:      reflect.TypeOf(ElectMsg{}),
 	RandomCoinType: reflect.TypeOf(RandomCoinMsg{}),
 	ReportType:     reflect.TypeOf(ReportMsg{}),
+	DocGQCType:     reflect.TypeOf(DocGQCMsg{}),
 }
