@@ -70,7 +70,7 @@ func (q *txQueue) make() {
 		q.nums--
 	}
 	//test set
-	batch.Txs = nil
+	// batch.Txs = nil
 	q.batchChannel <- batch
 }
 

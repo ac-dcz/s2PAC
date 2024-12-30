@@ -1,36 +1,30 @@
 import subprocess
+from fabric import task
+
 from benchmark.commands import CommandMaker
 from benchmark.local import LocalBench
 from benchmark.logs import ParseError, LogParser
 from benchmark.utils import BenchError,Print
-from alibaba.instance import InstanceManager
-from alibaba.remote import Bench
-import sys
-
-tasks = dict()
-
-def task(f):
-    tasks[f.__name__] = f
-    return f
+from aws.instance import InstanceManager
+from aws.remote import Bench
 
 @task
-def local():
+def local(ctx):
     ''' Run benchmarks on localhost '''
     bench_params = {
-        'nodes': [40],
-        'duration': 25,
-        'rate': [20_000],                  # tx send rate
-        'batch_size': 4096,              # the max number of tx that can be hold 
-        'log_level': 0b0001,            # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
-        'protocol_name': "2pac_big_dag"
+        'nodes': 4,
+        'duration': 30,
+        'rate': 3_200,                  # tx send rate
+        'batch_size': 200,              # the max number of tx that can be hold 
+        'log_level': 0b1111,            # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
+        'protocol_name': "2pac_lean"
     }
-    # [4_000,7_000,10_000,13_000,16_000,18_000,20_000,25_000]
     node_params = {
         "pool": {
             # "rate": 1_000,              # ignore: tx send rate 
-            "tx_size": 32,               # tx size
+            "tx_size": 250,               # tx size
             # "batch_size": 200,          # ignore: the max number of tx that can be hold 
-            "max_queue_size": 100000 
+            "max_queue_size": 10_000 
 	    },
         "consensus": {
             "sync_timeout": 500,        # node sync time
@@ -38,13 +32,13 @@ def local():
             "min_block_delay": 0,       # send block delay
             "ddos": False,              # DDOS attack
             "faults": 0,                # the number of byzantine node
-            "protocol": "2pac_big_dag",     # the type of protocol
-            "retry_delay": 5000,        # request block period
-            "latency":[[0,19,64,55],[19,0,50,57],[64,50,0,28],[55,57,28,0]]
+            "protocol": "2pac_lean",     # the type of protocol
+            "retry_delay": 5_000,        # request block period
         }
     }
     try:
-        LocalBench(bench_params, node_params).run(debug=True)
+        ret = LocalBench(bench_params, node_params).run(debug=True).result()
+        print(ret)
     except BenchError as e:
         Print.error(e)
 
@@ -103,7 +97,7 @@ def uploadexec(ctx):
         Print.error(e)
 
 @task
-def info():
+def info(ctx):
     ''' Display connect information about all the available machines '''
     try:
         InstanceManager.make().print_info()
@@ -117,8 +111,8 @@ def remote(ctx):
         'nodes': [10],
         'node_instance': 1,                                             # the number of running instance for a node  (max = 4)
         'duration': 30,
-        'rate': 8000,                                                  # tx send rate
-        'batch_size': [500,1000,2000,2500,3300,4000,5000],                              # the max number of tx that can be hold 
+        'rate': 8_000,                                                  # tx send rate
+        'batch_size': [5_00,1_000,2_000,2_500,3_300,4_000,5_000],                              # the max number of tx that can be hold 
         'log_level': 0b1111,                                            # 0x1 infolevel 0x2 debuglevel 0x4 warnlevel 0x8 errorlevel
         'protocol_name': "bft/2pac",
         'runs': 1
@@ -128,15 +122,15 @@ def remote(ctx):
             # "rate": 1_000,              # ignore: tx send rate 
             "tx_size": 250,               # tx size
             # "batch_size": 200,          # ignore: the max number of tx that can be hold 
-            "max_queue_size": 100000 
+            "max_queue_size": 100_000 
 	    },
         "consensus": {
-            "sync_timeout": 1000,      # node sync time
-            "network_delay": 1000,     # network delay
+            "sync_timeout": 1_000,      # node sync time
+            "network_delay": 1_000,     # network delay
             "min_block_delay": 0,       # send block delay
             "ddos": False,              # DDOS attack
             "faults": 3,                # the number of byzantine node
-            "retry_delay": 5000        # request block period
+            "retry_delay": 5_000        # request block period
         }
     }
     try:
@@ -161,21 +155,14 @@ def download(ctx,node_instance=2,ts="2024-06-19-09-02-46"):
         Print.error(e)
 
 @task
-def clean():
+def clean(ctx):
     cmd = f'{CommandMaker.cleanup_configs()};rm -f main'
     subprocess.run([cmd], shell=True, stderr=subprocess.DEVNULL)
 
 @task
-def logs():
+def logs(ctx):
     ''' Print a summary of the logs '''
     # try:
-    print(LogParser.process('./logs/2024-11-23-07-07-38').result())
+    print(LogParser.process('./logs/2024-10-10-05-08-37').result())
     # except ParseError as e:
     #     Print.error(BenchError('Failed to parse logs', e))
-
-if __name__ == "__main__":
-    task_name = sys.argv[1]
-    if task_name not in tasks:
-        print("not found this task")
-    else:
-        tasks[task_name]() 

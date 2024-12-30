@@ -110,45 +110,6 @@ class InstanceManager:
                         'Description': 'Consensus port',
                     }],
                 },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.smvba_port,
-                    'ToPort': self.settings.smvba_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'SMVBA port',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'SMVBA port',
-                    }],
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.mempool_port,
-                    'ToPort': self.settings.mempool_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'Mempool port',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'Mempool port',
-                    }],
-                },
-                {
-                    'IpProtocol': 'tcp',
-                    'FromPort': self.settings.front_port,
-                    'ToPort': self.settings.front_port,
-                    'IpRanges': [{
-                        'CidrIp': '0.0.0.0/0',
-                        'Description': 'Front end to accept clients transactions',
-                    }],
-                    'Ipv6Ranges': [{
-                        'CidrIpv6': '::/0',
-                        'Description': 'Front end to accept clients transactions',
-                    }],
-                },
             ]
         )
 
